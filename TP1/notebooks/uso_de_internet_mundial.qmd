@@ -5,23 +5,91 @@ format: html
 editor: visual
 ---
 
-## Quarto
+# Introducción
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+El objetivo de este trabajo es analizar el uso de internet a nivel mundial utilizando datos provistos el formato csv.
 
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+# Datos
 
 ```{r}
-1 + 1
+# install.packages("janitor")
+library (tidyverse)
+library(janitor)
+library(stringi)
 ```
 
-You can add options to executable code like this
+## Carga de datos
+
+En primer lugar, voy a cargar los datos de los Indicadores de penetración de Internet correspondientes al archivo internet_users_world_wide.csv y, en segundo lugar, los Metadatos de países, correspondientes al archivo metadata_countries_internet_users.csv.
 
 ```{r}
-#| echo: false
-2 * 2
+path_users =  "../data/internet_users_world_wide.csv" 
+users = read.csv(path_users, skip = 4)
+head(users)
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+```{r}
+path_income =  "../data/metadata_countries_internet_users.csv" 
+income = read.csv(path_income)
+head(income)
+```
+
+## Limpieza de datos
+
+```{r}
+normalize_dataframe = function(dataframe, clean = TRUE, which_remove = "cols") {
+  # Normalizacion
+  if (clean) {
+    data_clean = janitor::clean_names(dataframe)
+  } else {
+    data_clean = dataframe
+  }
+  
+  # Eliminacion de datos faltantes
+  if (which_remove == "both") {
+    data_clean = data_clean |> 
+      janitor::remove_empty(which = 'cols') |> 
+      janitor::remove_empty(which = 'rows')
+  } else {
+    data_clean = janitor::remove_empty(data_clean, which = which_remove)
+  }
+  
+  return(data_clean)
+}
+```
+
+```{r}
+users <- normalize_dataframe(users, which_remove = "both")
+income <- normalize_dataframe(income, which_remove = "both")
+```
+
+Ahora vamos a transformar la tabla de indicadores a formato long usando `pivot_longer` para que los datos queden más ordenados.
+
+```{r}
+users_long <- users |> 
+  pivot_longer(
+    cols = -c(country_name, country_code, indicator_name, indicator_code),  # todas las columnas que no son años
+    names_to = "year",
+    values_to = "internet_users_pje"
+  )
+
+# Limpiamos los NA ya que no aportan información relevante
+
+users_long <- users_long |> 
+  drop_na(internet_users_pje)
+
+head(users_long)
+
+```
+
+# Hipótesis del trabajo
+
+Este trabajo parte de la siguiente **hipótesis**:
+
+"En la última década (2013-2023), las regiones compuestas por países de ingresos bajos (Low income y Lower middle income) han mostrado una tasa de crecimiento porcentual en el acceso a internet superior a la de las regiones de ingresos altos (Upper middle income y High Income), aunque su penetración absoluta siga siendo significativamente menor."  
+
+Para comprobarla necesitamos unificar ambas bases de datos, para lo que vamos a utilizar la función **left join**
+
+```{r}
+
+```
