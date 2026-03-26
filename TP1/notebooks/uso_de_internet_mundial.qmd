@@ -102,7 +102,14 @@ Para comprobarla necesitamos unificar ambas bases de datos, para lo que vamos a 
 
 ```{r}
 users_joined_income <- users_long |> 
-  left_join(income, by = "country_code")
+  left_join(income, by = "country_code") |>
+  filter( 
+    !is.na(region),
+    region != "",
+    !is.na(income_group),
+    income_group != "",
+    !is.na(internet_users_pje)
+    )
 
 # Eliminamos la columna table_name porque repite la información de country_name
 
@@ -116,8 +123,50 @@ head(users_joined_income)
 Como la hipótesis se fija en el período de tiempo 2013-2023, vamos a filtrar la tabla en esa década.
 
 ```{r}
-
 users_con_income_filtro <- users_joined_income |> 
   filter(year >= 2013 & year <= 2023)
-
 ```
+
+Ahora, esnecesario acomodar los grupos de ingreso de forma jerárquica y así garantizar un orden de menor a mayor ingreso (de Low income a High income) y así evitar el ordenamiento alfabético por defecto para un futuro análisis o gráfico. Para esto, vamos a convertir la columna `income_group` a factor.
+
+```{r}
+users_con_income_filtro$income_group <- factor(
+  users_con_income_filtro$income_group,
+  levels = c(
+    "Low income", 
+    "Lower middle income", 
+    "Upper middle income", 
+    "High income"
+  )
+)
+
+# Agregación por income, región y año
+
+internet_region_year_income <- users_con_income_filtro |> 
+  group_by(region, year, income_group) |> 
+  summarize(
+    avg_internet = mean(internet_users_pje, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+head(internet_region_year_income)
+
+# Crecimiento
+
+internet_crecimiento <- internet_region_year_income |> 
+  group_by(region, income_group) |> 
+  summarize(
+    inicio = avg_internet[year == min(year)],
+    fin = avg_internet[year == max(year)],
+    crecimiento = (fin / inicio - 1) * 100,
+    .groups = "drop"
+  )
+
+head(internet_crecimiento)
+```
+
+
+
+
+
+
