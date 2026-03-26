@@ -7,9 +7,11 @@ editor: visual
 
 # Introducción
 
-El objetivo de este trabajo es analizar el uso de internet a nivel mundial utilizando datos provistos el formato csv.
+El objetivo de este trabajo es analizar el uso y acceso a internet a nivel mundial a través del tiempo por medio del análisis de dos bases de datos.
 
 # Datos
+
+El análisis se centra en el indicador *“Individuals using the Internet (% of population)”* (código `IT.NET.USER.ZS`), que mide el porcentaje de personas que han utilizado internet desde cualquier dispositivo en los últimos 3 meses. Los datos provienen de la *International Telecommunication Union (ITU)*, a través del dataset `internet_users_world_wide.csv`. Este indicador se utilizará para estudiar la evolución del uso de internet por país a lo largo de los años y su relación con la región y grupo de ingreso de cada país.
 
 ```{r}
 # install.packages("janitor")
@@ -20,7 +22,7 @@ library(stringi)
 
 ## Carga de datos
 
-En primer lugar, voy a cargar los datos de los Indicadores de penetración de Internet correspondientes al archivo internet_users_world_wide.csv y, en segundo lugar, los Metadatos de países, correspondientes al archivo metadata_countries_internet_users.csv.
+En primer lugar, voy a cargar los datos de los Indicadores de penetración de Internet correspondientes al archivo `internet_users_world_wide.csv` y, en segundo lugar, los Metadatos de países, correspondientes al archivo `metadata_countries_internet_users.csv`.
 
 ```{r}
 path_users =  "../data/internet_users_world_wide.csv" 
@@ -36,9 +38,13 @@ head(income)
 
 ## Limpieza de datos
 
+Con la siguiente función voy a limpiar y normalizar los datos. Además se limpiarán filas y columnas que esten llenas de NAs.
+
 ```{r}
 normalize_dataframe = function(dataframe, clean = TRUE, which_remove = "cols") {
-  # Normalizacion
+ 
+   # Normalizacion
+ 
   if (clean) {
     data_clean = janitor::clean_names(dataframe)
   } else {
@@ -46,6 +52,7 @@ normalize_dataframe = function(dataframe, clean = TRUE, which_remove = "cols") {
   }
   
   # Eliminacion de datos faltantes
+  
   if (which_remove == "both") {
     data_clean = data_clean |> 
       janitor::remove_empty(which = 'cols') |> 
@@ -68,9 +75,12 @@ Ahora vamos a transformar la tabla de indicadores a formato long usando `pivot_l
 ```{r}
 users_long <- users |> 
   pivot_longer(
-    cols = -c(country_name, country_code, indicator_name, indicator_code),  # todas las columnas que no son años
+    cols = -c(country_name, country_code, indicator_name, indicator_code),# aplicar a todo menos estas columnas
     names_to = "year",
     values_to = "internet_users_pje"
+    ) |> 
+  mutate(
+    year = as.numeric(stringr::str_remove(year, "x")) 
   )
 
 # Limpiamos los NA ya que no aportan información relevante
@@ -86,10 +96,28 @@ head(users_long)
 
 Este trabajo parte de la siguiente **hipótesis**:
 
-"En la última década (2013-2023), las regiones compuestas por países de ingresos bajos (Low income y Lower middle income) han mostrado una tasa de crecimiento porcentual en el acceso a internet superior a la de las regiones de ingresos altos (Upper middle income y High Income), aunque su penetración absoluta siga siendo significativamente menor."  
+"En la última década (2013-2023), las regiones compuestas por países de ingresos bajos (Low income y Lower middle income) han mostrado una tasa de crecimiento porcentual en el acceso a internet superior a la de las regiones de ingresos altos (Upper middle income y High Income), aunque su penetración absoluta siga siendo significativamente menor."
 
 Para comprobarla necesitamos unificar ambas bases de datos, para lo que vamos a utilizar la función **left join**
 
 ```{r}
+users_joined_income <- users_long |> 
+  left_join(income, by = "country_code")
+
+# Eliminamos la columna table_name porque repite la información de country_name
+
+users_joined_income <- users_joined_income |> 
+  select(-table_name)
+
+head(users_joined_income)
+
+```
+
+Como la hipótesis se fija en el período de tiempo 2013-2023, vamos a filtrar la tabla en esa década.
+
+```{r}
+
+users_con_income_filtro <- users_joined_income |> 
+  filter(year >= 2013 & year <= 2023)
 
 ```
