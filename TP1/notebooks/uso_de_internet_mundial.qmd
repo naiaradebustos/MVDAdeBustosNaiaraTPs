@@ -89,7 +89,6 @@ users_long <- users_long |>
   drop_na(internet_users_pje)
 
 head(users_long)
-
 ```
 
 # Hipótesis del trabajo
@@ -102,7 +101,7 @@ Para comprobarla necesitamos unificar ambas bases de datos, para lo que vamos a 
 
 ```{r}
 users_joined_income <- users_long |> 
-  left_join(income, by = "country_code") |>
+  left_join(income, by ="country_code") |>
   filter( 
     !is.na(region),
     region != "",
@@ -127,9 +126,12 @@ users_con_income_filtro <- users_joined_income |>
   filter(year >= 2013 & year <= 2023)
 ```
 
-Ahora, esnecesario acomodar los grupos de ingreso de forma jerárquica y así garantizar un orden de menor a mayor ingreso (de Low income a High income) y así evitar el ordenamiento alfabético por defecto para un futuro análisis o gráfico. Para esto, vamos a convertir la columna `income_group` a factor.
+Ahora, es necesario acomodar los grupos de ingreso de forma jerárquica y así garantizar un orden de menor a mayor ingreso (de Low income a High income) y así evitar el ordenamiento alfabético por defecto para un futuro análisis o gráfico. Para esto, vamos a convertir la columna `income_group` a factor.
 
-```{r}
+```{# {r}
+
+## Intento 2 ##
+
 users_con_income_filtro$income_group <- factor(
   users_con_income_filtro$income_group,
   levels = c(
@@ -143,7 +145,7 @@ users_con_income_filtro$income_group <- factor(
 # Agregación por income, región y año
 
 internet_region_year_income <- users_con_income_filtro |> 
-  group_by(region, year, income_group) |> 
+  group_by(year, income_group) |> 
   summarize(
     avg_internet = mean(internet_users_pje, na.rm = TRUE),
     .groups = "drop"
@@ -152,9 +154,8 @@ internet_region_year_income <- users_con_income_filtro |>
 head(internet_region_year_income)
 
 # Crecimiento
-
 internet_crecimiento <- internet_region_year_income |> 
-  group_by(region, income_group) |> 
+  group_by(income_group) |>
   summarize(
     inicio = avg_internet[year == min(year)],
     fin = avg_internet[year == max(year)],
@@ -165,8 +166,8 @@ internet_crecimiento <- internet_region_year_income |>
 head(internet_crecimiento)
 ```
 
+# Exportar los resultados
 
-
-
-
-
+```{r}
+write.csv(internet_crecimiento,"../output/crecimiento_internet.csv")
+```
