@@ -128,9 +128,7 @@ users_con_income_filtro <- users_joined_income |>
 
 Ahora, es necesario acomodar los grupos de ingreso de forma jerárquica y así garantizar un orden de menor a mayor ingreso (de Low income a High income) y así evitar el ordenamiento alfabético por defecto para un futuro análisis o gráfico. Para esto, vamos a convertir la columna `income_group` a factor.
 
-```{# {r}
-
-## Intento 2 ##
+```{r}
 
 users_con_income_filtro$income_group <- factor(
   users_con_income_filtro$income_group,
@@ -166,7 +164,9 @@ internet_crecimiento <- internet_region_year_income |>
 head(internet_crecimiento)
 ```
 
-# Exportar los resultados
+# Resultados
+
+La hipótesis se confirma ya que las regiones compuestas por países de ingresos bajos tienen un crecimiento porcentual mayor a la de las regiones de ingresos altos.
 
 ```{r}
 write.csv(internet_crecimiento,"../output/crecimiento_internet.csv")
