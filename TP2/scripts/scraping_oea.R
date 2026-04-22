@@ -1,7 +1,4 @@
 ### Librerías necesarias
-
-install.packages(c( "rvest", "httr2", "tidytext", "robotstxt", "stopwords"))
-
 library(tidyverse)  # Manipulación de datos
 library(rvest)      # Web scraping
 library(httr2)      # Requests HTTP
@@ -9,8 +6,12 @@ library(tidytext)   # Análisis de texto
 library(robotstxt)  # Verificar permisos de scraping
 library(here)       # Manejo de rutas de archivos
 library(xml2)       # Manejo de HTML (guardar la página completa x ej)
+# ---------------------------------------------------------------
 
-## Web scraping 
+############### 
+# WEB SCRAPING
+###############
+
 # URL de la página de noticias sobre Paz y Seguridad de la ONU en español
 
 urls_meses <- c(
@@ -253,12 +254,3 @@ comunicados_oea <- comunicados_oea |> left_join(cuerpos_comunicados_oea, by = "i
 comunicados_oea <- comunicados_oea |> select(id, titulo, cuerpo)
 
 comunicados_oea |> write_rds(file.path(data_dir, "comunicados_oea.rds"))
-
-
-
-
-
-
-
-
-
