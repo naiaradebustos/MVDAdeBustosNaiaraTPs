@@ -133,23 +133,20 @@ comunicados_abril <- tibble(
 
 # Función para scrapear una página de comunicados de la OEA
 scrapear_oea <- function(url) {
-  
   # Pausa para no sobrecargar el servidor
   Sys.sleep(3)
- 
   # Leemos la página
   html <- read_html(url)
-  
   # Extraemos los nodos de los títulos
   nodos_titulos <- html |>
     html_elements(".itemmenulink")
-  
+
   titulos <- nodos_titulos |>
     html_text2() |>
     str_trim()
   
   urls <- nodos_titulos |>
-    html_attr("href") |>
+    html_attr("href") 
     
   # Retornamos un tibble
   tibble(

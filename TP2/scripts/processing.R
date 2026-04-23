@@ -12,7 +12,7 @@ library(udpipe)     # Lematización
 # LIMPIEZA DE DATOS
 ###################
 
-# Creación de la crpeta output
+# Creación de la carpeta output
 
 # Leemos el dtaset anterior
 data_dir <- here("TP2", "data")
@@ -83,7 +83,9 @@ library(stopwords)
 # Cargamos las stop words en español del paquete tidytext
 data("stopwords", package = "stopwords")
 stop_es <- stopwords::stopwords("es")
+# Ponemos palabras en inglés por posibles citas
 stop_en <- stopwords::stopwords("en")
+
 stop_words <- tibble(lemma = c(stop_es, stop_en))
 
 # Convertir a tibble

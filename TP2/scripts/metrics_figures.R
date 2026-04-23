@@ -1,27 +1,20 @@
 ### Librerías necesarias
+library(tidyverse)  # Manipulación de datos
+library(tidytext)   # Análisis de texto
+library(here)       # Manejo de rutas de archivos
 library(tm)         # Text Mining (Document Term Matrix) 
 library(jsonlite)   # Para trabajar con JSON
 library(tidylo)     # Log Odds Ratio ponderado
 library(scales)     # Para formatear gráficos
 library(glue)       # Para strings dinámicos
 # ------------------------------------------
-# a. Utilizando el archivo generado por el script anterior
-#computar la Matriz de Frecuencia de Términos (DTM) para el
-#corpus lematizado. A partir de esta matriz, filtrar y
-#condensar la información para obtener la frecuencia total de
-# 5 términos (palabras) que consideren relevantes dado el
-#contexto institucional de la OEA.
-# b. A partir de los resultados, generar un gráfico de barras
-#utilizando ggplot2 que muestre la cantidad de apariciones
-#totales de esos 5 términos seleccionados a lo largo de todos
-#los comunicados. Esta figura debe guardarse en la carpeta
-# /output con el nombre frecuencia_terminos.png.
-
-# ------------------------------------------
 
 ################
 # DTM Y GRAFICOS
 ################
+
+# Leemos el dataset procesado
+tokens <- read_rds(here("TP2", "output", "processed_text.rds"))
 
 # Calculamos la frecuencia de los tokens
 frecuencia_tokens <- tokens |>
@@ -33,12 +26,9 @@ matriz_dtm <- frecuencia_tokens |>
 # Inspeccionamos
 matriz_dtm
 
-# términos mas frecuentes
-frecuencia_tokens |>
-  group_by(lemma) |>
-  summarise(total = sum(n)) |>
-  arrange(desc(total)) |>
-  head(20)
+# Palabras más frecuentes
+palabras_frecuentes <- tokens |> count(lemma, sort = TRUE)
+head(palabras_frecuentes, 20)
 
 # Filtramos palabras clave 
 terminos_de_interes <- c("misión", "derecho", "democrático", "elección", "constitucional")
@@ -53,8 +43,31 @@ dtm_df <- as.data.frame(as.matrix(matriz_dtm_de_interes)) |>
   group_by(lemma) |>
   summarise(frecuencia_total = sum(n))
 
+## GRAFICO DE BARRAS
+# Graficamos la frecuencia de los términos de interés
+ggplot(dtm_df, aes(x = lemma, y = frecuencia_total)) +
+  geom_col(fill = "steelblue") +
+  labs(
+    title = "Frecuencia de términos de interés en comunicados de la OEA",
+    x = "Término",
+    y = "Frecuencia",
+    caption = "Fuente: Comunicados de prensa de la OEA (enero-abril 2026)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  )
 
-
+#Guardamos el gráfico
+ggsave(
+  filename = file.path(output_dir, "frecuencia_terminos.png"),
+  plot = last_plot(),
+  width = 10,
+  height = 6,
+  dpi = 300
+)
 
 
 
