@@ -1,0 +1,243 @@
+---
+title: "census_income_usa"
+format: html
+editor: visual
+include-in-header:
+      text: |
+        <style>
+        body {
+          text-align: justify;
+          font-size: 16px;
+          line-height: 1.6;
+        }
+        h1, h2, h3 {
+          color: #2C3E50;
+        }
+        .callout {
+          margin-top: 1.5em;
+          margin-bottom: 1.5em;
+        }
+        </style>
+---
+
+## Consigna
+
+El objetivo analítico es modelar la probabilidad de que un ciudadano tenga ingresos superiores a los \$50,000 (dólares) anuales (variable objetivo dicotómica: \>50K vs \<=50K), utilizando predictores demográficos y laborales (a su criterio). Para ello deberán adoptar una perspectiva descriptiva y explicativa, que busque modelar qué factores sociodemográficos y laborales determinan que un ciudadano pertenezca al estrato de altos ingresos.
+
+## Librerías necesarias
+
+```{r}
+if (!require("pacman")) install.packages("pacman")
+
+pacman::p_load(
+  tidyverse,        # Manipulación de datos (dplyr, tidyr) y visualización (ggplot2)
+  caret,            # Herramientas para partición de datos (train/test split)
+  scales,           # Formateo de ejes y etiquetas en gráficos (porcentajes, comas)
+  broom,            # Convertir outputs de modelos en dataframes (tidy, glance, augment)
+  modelsummary,     # Creación de tablas de regresión estilo publicación académica
+  kableExtra,       # decoración de tablas kable
+  marginaleffects,  # Cálculo de efectos marginales y predicciones 
+  yardstick,        # Métricas de evaluación de clasificación (ROC, AUC, Matriz de Confusión)
+  patchwork         # Organizar el apilado y composición de figuras
+)
+
+library(here)
+```
+
+## Preparación de los datos
+
+```{r}
+## cargamos las fuentes de datos
+df_census  <- read_csv(here("TP3/data/adult_census_USA.csv"))
+
+```
+
+```{r}
+unique(df_census$income)
+
+df_modelo <- df_census |>
+  drop_na() |>
+  mutate(
+    income  = factor(income, levels = c("<=50K", ">50K")),
+    income_num = ifelse(income == "<=50K", 0, 1),
+  )
+
+```
+
+Las variabes que vamos a elegir para calcular la probabilidad de ser de un estrato o de otro van a ser:
+
+-   `education_num` -\> está comprobado que hay mayores probabilidades de que las personas que estudiaron más tiempo tengan mejores salarios
+
+-   `marital_status` -\> es más probable que las personas casadas cuenten con ingresos más altos porque hay dos ingresos
+
+-   `race` -\> la discriminación por raza es un predictor de trbajos con menores sueldos
+
+-   `sex` -\> es más probable que las mujeres tengan salarios más bajos que los hombres
+
+-   `native_country` -\> el país de nacimiento puede ser un predictor de mejores o peores sueldos
+
+### Limpieza de variables explicativas
+
+```{r}
+ table(df_modelo$sex)
+ unique(df_modelo$education_num)
+
+#Simplificamos la variable marital_status
+df_modelo <- df_modelo |>
+  mutate(
+    marital_status_simple = case_when(
+      marital_status %in% c("Never-married", "Divorced", "Separated", "Widowed") ~ "Single",
+      marital_status %in% c("Married-civ-spouse", "Married-spouse-absent", "Married-AF-spouse")            ~ "Married"
+    )
+  )
+# ----------------------------------------------------------
+# simplificamos y ordenamos la variable race
+df_modelo <- df_modelo |>
+  mutate(
+    race_simple = case_when(
+      race == "White" ~ "White",
+      race == "Black" ~ "Black",
+      TRUE ~ "Other"  # agrupa las categorías pequeñas
+    ),
+    race_simple = factor(race_simple, levels = c("White", "Black", "Other"))
+  )
+# ----------------------------------------------------------
+# Simplificamos y ordenamos la variable native_country
+df_modelo <- df_modelo |>
+  mutate(
+    country_simple = case_when(
+      native_country == "United-States"                          ~ "USA",
+      native_country == "Mexico"                                 ~ "México",
+      native_country %in% c("Philippines", "India", "China", 
+                             "Japan", "Vietnam", "Taiwan",
+                             "Hong", "Cambodia", "Thailand",
+                             "Laos", "Iran")                     ~ "Asia",
+      native_country %in% c("Germany", "England", "Italy",
+                             "Poland", "Portugal", "France",
+                             "Greece", "Ireland", "Scotland",
+                             "Hungary", "Yugoslavia",
+                             "Holand-Netherlands")               ~ "Europa",
+      native_country %in% c("Cuba", "Jamaica", "Puerto-Rico",
+                             "Dominican-Republic", "Haiti",
+                             "Trinadad&Tobago")                  ~ "Caribe",
+      native_country %in% c("El-Salvador", "Guatemala",
+                             "Nicaragua", "Honduras",
+                             "Columbia", "Ecuador",
+                             "Peru", "South")                    ~ "Latinoamérica",
+      TRUE                                                       ~ "Otros"
+    ),
+    country_simple = factor(country_simple, 
+                            levels = c("USA", "México", "Latinoamérica", 
+                                       "Caribe", "Asia", "Europa", "Otros"))
+  )
+# ----------------------------------------------------------
+# Acomodamos la variable sex
+df_modelo <- df_modelo |>
+  mutate(
+    sex = factor(sex, levels = c("Male", "Female"))
+  )
+
+#Vemos si está balanceado el df
+print(prop.table(table(df_modelo$income)) |> round(3))
+
+```
+
+## Exploración Visual: decisiones de especificación del modelo
+
+Vamos a evaluar la distribución de los datos a través de gráficos para determinar si es necesario realizar una transformación y cuál va a ser el término de interacción que vamos a integrar.
+
+En función de esto, vamos a ver cómo se distribuyen las variables independientes anteriormente mencionadas en función de la dependiente. Por lo tanto, vamos a intentar ver ¿Qué variables separan a las personas entre cobrar más de 50 usd y cobrar menos?
+
+```{r}
+#| fig-width: 14
+#| fig-height: 12
+
+# Paleta de colores para income
+paleta_income <- c("<=50K" = "#E74C3C", ">50K" = "#2ECC71")
+
+# ----------------------------------------------------------
+# education_num vs Income (Violin + Boxplot) - continua
+p_edu <- df_modelo |>
+  ggplot(aes(x = income, y = education_num, fill = income, color = income)) +
+  geom_violin(alpha = 0.3, linewidth = 0.5, width = 0.8) +
+  geom_boxplot(width = 0.2, alpha = 0.8, color = "gray20", outlier.shape = NA) +
+  scale_fill_manual(values = paleta_income, guide = "none") +
+  scale_color_manual(values = paleta_income, guide = "none") +
+  labs(title = "Años de Educación", x = "Ingreso", y = "Años") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", size = 15))
+
+# ----------------------------------------------------------
+# sex vs Income (Barras proporcionales) - categórica
+p_sex <- df_modelo |>
+  ggplot(aes(x = sex, fill = income)) +
+  geom_bar(position = "fill", alpha = 0.8, color = "white") +
+  scale_fill_manual(values = paleta_income, name = "Ingreso") +
+  scale_y_continuous(labels = scales::label_percent(), limits = c(0, 1)) +
+  labs(title = "Ingreso por Sexo", x = "Sexo", y = "Proporción") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", size = 15),
+        panel.grid.major.x = element_blank())
+
+# ----------------------------------------------------------
+# race vs Income (Barras proporcionales) - categórica
+p_race <- df_modelo |>
+  ggplot(aes(x = race, fill = income)) +
+  geom_bar(position = "fill", alpha = 0.8, color = "white") +
+  scale_fill_manual(values = paleta_income, name = "Ingreso") +
+  scale_y_continuous(labels = scales::label_percent(), limits = c(0, 1)) +
+  labs(title = "Ingreso por Raza", x = "Raza", y = "Proporción") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", size = 15),
+        panel.grid.major.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+# ----------------------------------------------------------
+# marital_status vs Income (Barras proporcionales) - categórica
+p_marital <- df_modelo |>
+  ggplot(aes(x = marital_status_simple, fill = income)) +
+  geom_bar(position = "fill", alpha = 0.8, color = "white") +
+  scale_fill_manual(values = paleta_income, name = "Ingreso") +
+  scale_y_continuous(labels = scales::label_percent(), limits = c(0, 1)) +
+  labs(title = "Ingreso por Estado Civil", x = "Estado Civil", y = "Proporción") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", size = 15),
+        panel.grid.major.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+# ----------------------------------------------------------
+# country_simple vs Income (Barras proporcionales) - categórica
+p_country <- df_modelo |>
+  ggplot(aes(x = country_simple, fill = income)) +
+  geom_bar(position = "fill", alpha = 0.8, color = "white") +
+  scale_fill_manual(values = paleta_income, name = "Ingreso") +
+  scale_y_continuous(labels = scales::label_percent(), limits = c(0, 1)) +
+  labs(title = "Ingreso por País de Origen", x = "País", y = "Proporción") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", size = 15),
+        panel.grid.major.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+# ----------------------------------------------------------
+# Combinamos con patchwork
+((p_edu + p_sex) / (p_race + p_marital) / p_country) +
+  plot_layout(heights = c(1.2, 1.2, 1.5)) +
+  plot_annotation(
+    title = "Distribución de variables predictoras según nivel de ingreso",
+    theme = theme(plot.title = element_text(face = "bold", size = 18))
+  )
+```
+
+En base a la observación del gráfico podemos sacar dos conclusiones principales. En primer lugar, dado que es mi única variable continua, `education_num`no necesita ninguna transformación logaritmica porque sus valores se distribuyen en un rango acotado y no hay mucha asimetría.
+
+Por otro lado, en cuanto al térmio de interacción, sería bueno que la variabe `sex` interactúe con `education_num` dado que puede que dos personas con el mismo nivel de educación pero con diiferente género no tengan el mismo salario, lo que reflejaría la brecha de género.
+
+## Regresiones logísticas
+
+Es ilógico estimar la probabilidad de los diferentes ingresos a partir de una regresión lineal, ya que se extiende hasta el infinito. Por lo tanto, lo vamos a hacer con regresiones logísticas, que estiman valores entre 0 y 1.
+
+```{r}
+
+
+
+```
