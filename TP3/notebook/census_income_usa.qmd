@@ -42,6 +42,10 @@ pacman::p_load(
 )
 
 library(here)
+install.packages("data.table", type = "binary")
+library(data.table)
+install.packages("marginaleffects")
+library(marginaleffects)
 ```
 
 ## Preparación de los datos
@@ -53,7 +57,7 @@ df_census  <- read_csv(here("TP3/data/adult_census_USA.csv"))
 ```
 
 ```{r}
-unique(df_census$income)
+# unique(df_census$income)
 
 df_modelo <- df_census |>
   drop_na() |>
@@ -79,8 +83,8 @@ Las variabes que vamos a elegir para calcular la probabilidad de ser de un estra
 ### Limpieza de variables explicativas
 
 ```{r}
- table(df_modelo$sex)
- unique(df_modelo$education_num)
+# table(df_modelo$sex)
+# unique(df_modelo$education_num)
 
 #Simplificamos la variable marital_status
 df_modelo <- df_modelo |>
@@ -226,6 +230,7 @@ p_country <- df_modelo |>
     title = "Distribución de variables predictoras según nivel de ingreso",
     theme = theme(plot.title = element_text(face = "bold", size = 18))
   )
+
 ```
 
 En base a la observación del gráfico podemos sacar dos conclusiones principales. En primer lugar, dado que es mi única variable continua, `education_num`no necesita ninguna transformación logaritmica porque sus valores se distribuyen en un rango acotado y no hay mucha asimetría.
@@ -238,6 +243,101 @@ Es ilógico estimar la probabilidad de los diferentes ingresos a partir de una r
 
 ```{r}
 
+# Primero, estimamos el modelo base (sin término de interacción)
+mod_1 <- glm(
+  income ~ education_num +sex+ race_simple + marital_status_simple + country_simple,
+  family = "binomial", 
+  data = df_modelo
+)
 
+# En segundo lugar, estimamos el modelo con el término interactivo
+mod_2 <- glm(
+  income ~ education_num*sex + race_simple + marital_status_simple + country_simple,
+  family = "binomial", 
+  data = df_modelo
+)
 
+# Revisamos el resumen del modelo con interacción
+summary(mod_1)
+summary(mod_2)
+
+```
+
+## Efectos Marginales Promedio
+
+Como el objetivo para el segundo modelo es cuantificar los resultados, vamos a usar la herramienta de Efectos Marginales Promedio.
+
+Como cada persona tiene diferentes años de educación, sexo, raza, estado civil o nacionalidad, el efecto marginal va a ser distinto para cada persona. El Efecto Marginal Promedio calcula el efecto exacto para cada individuo.
+
+La pregunta sería: *"En promedio poblacional, si aumento X en una unidad, ¿en cuántos puntos porcentuales cambia la probabilidad del evento?"*
+
+```{r}
+#| label: average-marginal-effects
+#| message: false
+#| warning: false
+
+#mod_2 <- glm(
+#   income ~ education_num*sex + race_simple + marital_status_simple + #country_simple,
+#  family = "binomial", 
+#  data = df_modelo
+
+# Calculamos el AME estándar (dY/dX) SOLO para las variables lineales/categóricas
+ame_estandar <- avg_slopes(
+  mod_2,
+  # Especificamos las variables que NO queremos tratar como elasticidades
+  variables = c("sex", "race_simple", "marital_status_simple","country_simple"),
+  slope = "dydx"
+)
+# Calculamos la semi-elasticidad (dY/ex) SOLO para la educación
+ame_educacion <- avg_slopes(
+  mod_2,
+  # Aislamos la variable de educación
+  variables = "education_num", 
+  slope = "dyex"
+)
+
+# Apilamos los resultados en una sola tabla combinada
+efectos_marginales <- bind_rows(ame_estandar, ame_educacion)
+
+# Lo mostramos en una tabla limpia
+efectos_marginales |> 
+  select(term, contrast, estimate, conf.low, conf.high, p.value) |> 
+  
+  mutate(
+    # Multiplicamos por 100 y le pegamos el símbolo % para lectura humana
+    estimate_pct = paste0(round(estimate * 100, 2), "%"),
+    interpretacion = case_when(
+      estimate > 0 & p.value < 0.05 ~ "Aumenta prob. (Sig.)",
+      estimate < 0 & p.value < 0.05 ~ "Reduce prob. (Sig.)",
+      TRUE ~ "No significativo"
+    )
+  ) |> 
+  select(
+    term, contrast, estimate_pct, conf.low, conf.high, p.value, interpretacion
+  )|> 
+  rename(
+    `Predictor` = term,
+    `Contraste` = contrast,
+    `Efecto (Prob)` = estimate_pct,
+    `IC Inferior` = conf.low,
+    `IC Superior` = conf.high,
+    `Valor p` = p.value,
+    `Interpretación` = interpretacion
+  ) |> 
+  knitr::kable(
+    digits = 4, 
+    caption = "Efectos Marginales Promedio (Cambio en Probabilidad)"
+  ) |> 
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+    full_width = FALSE,
+    position = "center"
+  ) |> 
+  # Sombreado azul clarito para las filas significativas
+  row_spec(
+    row = which(efectos_marginales$p.value < 0.05), 
+    bold = TRUE, 
+    color = "black", 
+    background = "#e6f2ff"
+  )
 ```
