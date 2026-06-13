@@ -20,11 +20,11 @@ include-in-header:
         </style>
 ---
 
-## Consigna
+# Consigna
 
 El objetivo analítico es modelar la probabilidad de que un ciudadano tenga ingresos superiores a los \$50,000 (dólares) anuales (variable objetivo dicotómica: \>50K vs \<=50K), utilizando predictores demográficos y laborales (a su criterio). Para ello deberán adoptar una perspectiva descriptiva y explicativa, que busque modelar qué factores sociodemográficos y laborales determinan que un ciudadano pertenezca al estrato de altos ingresos.
 
-## Librerías necesarias
+# Librerías necesarias
 
 ```{r}
 if (!require("pacman")) install.packages("pacman")
@@ -44,7 +44,7 @@ pacman::p_load(
 
 ```
 
-## Preparación de los datos
+# Preparación y exploración de los datos
 
 ```{r}
 ## cargamos las fuentes de datos
@@ -70,19 +70,19 @@ Las variabes que vamos a elegir para calcular la probabilidad de ser de un estra
 
 -   `marital_status` -\> es más probable que las personas casadas cuenten con ingresos más altos porque hay dos ingresos
 
--   `race` -\> la discriminación por raza es un predictor de trbajos con menores sueldos
+-   `race` -\> la discriminación por raza es un predictor de trabajos con menores sueldos
 
 -   `sex` -\> es más probable que las mujeres tengan salarios más bajos que los hombres
 
 -   `native_country` -\> el país de nacimiento puede ser un predictor de mejores o peores sueldos
 
-### Limpieza de variables explicativas
+## Limpieza de variables explicativas
 
 ```{r}
 # table(df_modelo$sex)
 # unique(df_modelo$education_num)
 
-#Simplificamos la variable marital_status
+#Simplificamos y ordenamos la variable marital_status
 df_modelo <- df_modelo |>
   mutate(
     marital_status_simple = case_when(
@@ -150,7 +150,7 @@ print(prop.table(table(df_modelo$income)) |> round(3))
 
 Vamos a evaluar la distribución de los datos a través de gráficos para determinar si es necesario realizar una transformación y cuál va a ser el término de interacción que vamos a integrar.
 
-En función de esto, vamos a ver cómo se distribuyen las variables independientes anteriormente mencionadas en función de la dependiente. Por lo tanto, vamos a intentar ver ¿Qué variables separan a las personas entre cobrar más de 50 usd y cobrar menos?
+En función de esto, vamos a ver cómo se distribuyen las variables independientes anteriormente mencionadas en función de la dependiente. Por lo tanto, vamos a intentar ver ¿Qué variables separan a las personas entre cobrar más de 50.000 usd y cobrar menos?
 
 ```{r}
 #| fig-width: 14
@@ -235,7 +235,7 @@ p_country <- df_modelo |>
 
 En base a la observación del gráfico podemos sacar dos conclusiones principales. En primer lugar, dado que es mi única variable continua, `education_num`no necesita ninguna transformación logaritmica porque sus valores se distribuyen en un rango acotado y no hay mucha asimetría.
 
-Por otro lado, en cuanto al térmio de interacción, sería bueno que la variabe `sex` interactúe con `education_num` dado que puede que dos personas con el mismo nivel de educación pero con diiferente género no tengan el mismo salario, lo que reflejaría la brecha de género.
+Por otro lado, en cuanto al térmio de interacción, sería bueno que la variabe `sex` interactúe con `education_num` dado que hay teorías que sostienen que dos personas con el mismo nivel de educación pero con diiferente género no tienen el mismo salario. De ser así, esto reflejaría una brecha de género.
 
 ```{r}
 # Proporción observada de ingresos >50K por educación y sexo
@@ -277,19 +277,24 @@ ggplot(df_interaccion,
 )
 ```
 
-Justificación de la interacción: Como podemos observar en el gráfico, hay una diferencia entre los ingresos que reciben hombres y mujeres con diferentes niveles de educación. Por lo tanto, viendo que los salarios de los hombres tienden a ser más altos aunque tengan la misma educación que las mujeres, el término de interacción entre `sex` y `education_num` es pertinente para el análisis.
+::: callout-tip
+**Justificación de la interacción**
 
-## Regresiones logísticas
+Como podemos observar en el gráfico, hay una diferencia entre los ingresos que reciben hombres y mujeres con diferentes niveles de educación. Por lo tanto, viendo que los salarios de los hombres tienden a ser más altos aunque tengan la misma educación que las mujeres, el término de interacción entre `sex` y `education_num` es pertinente para el análisis.
+:::
 
-Es ilógico estimar la probabilidad de los diferentes ingresos a partir de una regresión lineal, ya que se extiende hasta el infinito. Por lo tanto, lo vamos a hacer con regresiones logísticas, que estiman valores entre 0 y 1.
+# Modelamos
 
-Para esto vamos a estimar dos modelos. Por un lado, el modelo 1 incluye los efectos principles de las variables independientes. Por otro lado, el modelo 2 incorpora un término de interacción entre años de educación y sexo para evaluar el efecto de la educación sobre la probabilidad de percibir ingresos superiores a 50.000 dolares entre hombres y mujeres.
+Es ilógico estimar la probabilidad de los diferentes ingresos a partir de una regresión lineal, ya que esta se extiende hasta el infinito. Por lo tanto, lo vamos a hacer con **regresiones logísticas**, que estiman valores entre 0 y 1.
+
+Para esto vamos a estimar dos modelos. Por un lado, el modelo 1 incluye los efectos principles de las variables independientes. Por otro lado, el modelo 2 incorpora un término de interacción entre años de educación y sexo para evaluar el efecto de la educación sobre la probabilidad de percibir ingresos superiores a 50.000 usd entre hombres y mujeres.
 
 ```{r}
 
 # Primero, estimamos el modelo base (sin término de interacción)
 mod_1 <- glm(
-  income ~ education_num + sex + race_simple + marital_status_simple + country_simple,
+  income ~ education_num + sex + race_simple + 
+    marital_status_simple + country_simple,
   family = "binomial", 
   data = df_modelo
 )
@@ -302,7 +307,7 @@ mod_2 <- glm(
 )
 ```
 
-Los modelos estimados se deben interpretar respecto a una categoría de referencia. Por este motivo, se dejó a propósito las siguientes categorías como base: hombres para sexo, blancos para raza, Estados Unidos para país de origen y soltero para estado civil.
+Los modelos estimados se deben interpretar respecto a una categoría de referencia. Por este motivo, se dejó a propósito las siguientes categorías como base: hombres para sexo, blancos para raza, soltero para estado civil y Estados Unidos para país de origen.
 
 ```{r}
 # Revisamos el resumen de los modelos
@@ -310,41 +315,45 @@ summary(mod_1)
 summary(mod_2)
 ```
 
-## Efectos Marginales Promedio
+## Interpretación de los resultados
 
-Como el objetivo para el segundo modelo es cuantificar los resultados, vamos a usar la herramienta de Efectos Marginales Promedio.
+Los resultados de los modelos muestran que la interacción entre educación y sexo no resultó estadísticamente significativo (p = 0.324), aunque visualmente parecía serlo. Esto demuestra que lo que se pensaba no se sostiene una vez controladas las demás variables del modelo.
 
-Como cada persona tiene diferentes años de educación, sexo, raza, estado civil o nacionalidad, el efecto marginal va a ser distinto para cada persona. El Efecto Marginal Promedio calcula el efecto exacto para cada individuo.
+Por otro lado, observamos que los **años de educación** constituyen uno de los principales determinantes del nivel de ingresos. El coeficiente es positivo y significativo, lo que indica que mayores niveles educativos se asocian con una mayor probabilidad de pertenecer al grupo de ingresos superiores a 50.000 usd.
 
-La pregunta sería: *"En promedio poblacional, si aumento X en una unidad, ¿en cuántos puntos porcentuales cambia la probabilidad del evento?"*
+En cuanto al **sexo**, las mujeres presentan una probabilidad significativamente menor de alcanzar dicho nivel de ingresos respecto de los hombres, manteniendo constantes las demás variables.
+
+Respecto de la **raza**, los individuos identificados como *black* presentan una menor probabilidad de percibir ingresos altos en comparación con los individuos *white*.
+
+El **estado civil** muestra uno de los efectos más fuertes del modelo: las personas casadas presentan una probabilidad mayor de pertenecer al estrato de ingresos altos respecto de las personas solteras.
+
+Finalmente, se observan diferencias según **país de origen**. Los individuos provenientes de México y de otros países latinoamericanos presentan menores probabilidades de alcanzar ingresos superiores a 50.000 usd en comparación con los nacidos en Estados Unidos.
+
+## Resultados en lenguaje interpretable
+
+### Efectos Marginales Promedio
+
+Para entender de forma más intuitiva los resultados vamos a calcular los Efectos Marginales Promedio del modelo. Estos permiten expresar los efectos de las variables independientes en términos de cambios promedio en la probabilidad de pertenecer al grupo de slarios superiores a los 50.000 usd. De esta forma, los resultados pueden interpretarse directamente en puntos porcentuales y compararse de manera más intuitiva.
+
+La pregunta sería: *"En promedio poblacional, si aumento X en una unidad, ¿en cuántos puntos porcentuales cambia la probabilidad de que una persona tenga ingresos superiores a USD 50.000 anuales?"*
 
 ```{r}
 #| label: average-marginal-effects
 #| message: false
 #| warning: false
 
-#mod_2 <- glm(
-#   income ~ education_num*sex + race_simple + marital_status_simple + #country_simple,
-#  family = "binomial", 
-#  data = df_modelo
-
-# Calculamos el AME estándar (dY/dX) SOLO para las variables lineales/categóricas
-ame_estandar <- avg_slopes(
+# Calculamos el AME estándar 
+efectos_marginales <- avg_slopes(
   mod_2,
-  # Especificamos las variables que NO queremos tratar como elasticidades
-  variables = c("sex", "race_simple", "marital_status_simple","country_simple"),
+  variables = c(
+    "education_num", 
+    "sex", 
+    "race_simple", 
+    "marital_status_simple",
+    "country_simple"
+                ),
   slope = "dydx"
 )
-# Calculamos la semi-elasticidad (dY/ex) SOLO para la educación
-ame_educacion <- avg_slopes(
-  mod_2,
-  # Aislamos la variable de educación
-  variables = "education_num", 
-  slope = "dyex"
-)
-
-# Apilamos los resultados en una sola tabla combinada
-efectos_marginales <- bind_rows(ame_estandar, ame_educacion)
 
 # Lo mostramos en una tabla limpia
 efectos_marginales |> 
@@ -388,3 +397,247 @@ efectos_marginales |>
     background = "#e6f2ff"
   )
 ```
+
+### Gráfico de bosque
+
+Con el objetivo de interpretar los coeficientes de la regresión logística en términos más intuitivos, se transforman los log-odds en Odds Ratios. Un Odds Ratio superior a 1 indica que la variable aumenta las chances de pertenecer al grupo de ingresos superiores a 50.000 usd, mientras que un Odds Ratio inferior a 1 indica una reducción de dichas chances.
+
+```{r}
+#| label: odds-ratios
+#| message: false
+#| warning: false
+
+# Creamos los odds ratios
+or_modelo <- broom::tidy(
+  mod_2,
+  exponentiate = TRUE,
+  conf.int = TRUE
+) |> 
+  select(term, estimate, conf.low, conf.high, p.value) |> 
+  mutate(
+    interpretacion = case_when(
+      estimate > 1 & p.value < 0.05 ~ "Aumenta chances (Sig.)",
+      estimate < 1 & p.value < 0.05 ~ "Reduce chances (Sig.)",
+      TRUE ~ "No significativo"
+    )
+  )
+# Mostramos la tabla formateada
+or_modelo |> 
+  rename(
+    `Predictor` = term,
+    `Odds Ratio` = estimate,
+    `IC Inferior` = conf.low,
+    `IC Superior` = conf.high,
+    `Valor p` = p.value,
+    `Interpretación` = interpretacion
+  ) |> 
+  knitr::kable(
+    digits = 3,
+    caption = "Odds Ratios del Modelo 2 (Interactivo)"
+  ) |> 
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+    full_width = FALSE,
+    position = "center"
+  ) |> 
+  row_spec(
+    row = which(or_modelo$p.value < 0.05),
+    bold = TRUE,
+    color = "black",
+    background = "#e6f2ff"
+  )
+```
+
+Con la transformación a Odds Ratios vamos a armar el gráfico de bosque para clarificar los resultados e interpretarlos. De esta forma, se presentan intervalos de confianza del 80%, 95% y 99% para evaluar la precisión de las estimaciones.
+
+```{r}
+# Agregamos los diferentes niveles de confianza 
+or_80 <- broom::tidy(
+  mod_2,
+  exponentiate = TRUE,
+  conf.int = TRUE,
+  conf.level = 0.80
+) |>
+  select(term, conf.low80 = conf.low, conf.high80 = conf.high)
+
+or_95 <- broom::tidy(
+  mod_2,
+  exponentiate = TRUE,
+  conf.int = TRUE,
+  conf.level = 0.95
+) |>
+  select(term, estimate, conf.low95 = conf.low, conf.high95 = conf.high)
+
+or_99 <- broom::tidy(
+  mod_2,
+  exponentiate = TRUE,
+  conf.int = TRUE,
+  conf.level = 0.99
+) |>
+  select(term, conf.low99 = conf.low, conf.high99 = conf.high)
+
+# Unificamos las tablas en una sola
+forest_data <- or_80 |>
+  left_join(or_95, by = "term") |>
+  left_join(or_99, by = "term") |>
+  filter(term != "(Intercept)")
+
+# Cambiamos los nombres de las variables para el gráfico
+forest_data <- forest_data |>
+  mutate(
+    term = recode(
+      term,
+      "education_num" = "Años de educación",
+      "sexFemale" = "Mujer",
+      "race_simpleBlack" = "Raza: Negra",
+      "race_simpleOther" = "Raza: Otras",
+      "marital_status_simpleMarried" = "Casado",
+      "country_simpleMéxico" = "México",
+      "country_simpleLatinoamérica" = "Latinoamérica",
+      "country_simpleCaribe" = "Caribe",
+      "country_simpleAsia" = "Asia",
+      "country_simpleEuropa" = "Europa",
+      "country_simpleOtros" = "Otros",
+      "education_num:sexFemale" = "Educación × Mujer"
+    ))
+   
+# ordenamos
+forest_data <- forest_data |>
+  arrange(estimate) |>
+  mutate(
+    term = factor(term, levels = term)
+  )
+
+# GRÁFICO
+
+ggplot(
+  forest_data,
+  aes(
+    x = estimate,
+    y = term
+  )
+) +
+
+# IC 99%
+geom_errorbarh(
+  aes(
+    xmin = conf.low99,
+    xmax = conf.high99
+  ),
+  height = .08,
+  linewidth = .3,
+  alpha = .15
+) +
+
+# IC 95%
+geom_errorbarh(
+  aes(
+    xmin = conf.low95,
+    xmax = conf.high95
+  ),
+  height = .08,
+  linewidth = .7,
+  alpha = .35
+) +
+
+# IC 80%
+geom_errorbarh(
+  aes(
+    xmin = conf.low80,
+    xmax = conf.high80
+  ),
+  height = .08,
+  linewidth = 1.2,
+  alpha = .7
+) +
+
+  geom_point(
+  size = 2.5
+) +
+
+  geom_vline(
+    xintercept = 1,
+    linetype = "dashed",
+    color = "red"
+  ) +
+
+  scale_x_log10() +
+
+  labs(
+    title = "Forest Plot de Odds Ratios",
+    subtitle = "Modelo Logístico con Interacción",
+    x = "Odds Ratio (escala logarítmica)",
+    y = NULL
+  ) +
+
+  theme_minimal(base_size = 13) +
+
+theme(
+  panel.grid.minor = element_blank(),
+  panel.grid.major.y = element_blank(),
+  plot.title = element_text(face = "bold"),
+  axis.text.y = element_text(size = 11)
+)
+```
+
+::: callout-tip
+**Interpretación**
+
+En primer lugar, observamos que un año más de **educación** aumenta en un 6% la probabilidad de pertenecer al estracto más asalariado. Respecto al **sexo**, ser mujer reduce en un 6,5% la probabilidad de recibir un salario de más de 50.000 usd. En cuanto a la **raza**, las personas identificadas como *black* tienen una probabilidad del 4% de no recibir salarios altos en comparación con la gente identificada como *white*. Por su parte, el **estado civil** muestra que las personas casadas tienen un 45% de probabilidad de pertenecer a un sector más asalariado en comparación con las personas solteras. Por último, el **país de** **origen** tambien tiene un impacto, si una persona es de origen latinoamericano o mexicano hay una probabilidad del 18% y del 16% respectivamente de no tener un salario por encima de los 50.000 usd.
+
+Por su parte, el argumento de interacción mostró no ser significativo. Esto demuestra que no hay evidencia suficiente para afirmar que la educacion sobre la probabilidad de tener ingresos mayores a 50.000 usd sea diferente para hombres y mujeres. De todas formas, tanto la educación como el sexo tienen sus efectos propios, pero parecen operar de forma independiente.
+
+Para un futuro análisis se podria explorar la interacción entre el sexo y el estado civil.
+:::
+
+## Comparación global entre los modelos
+
+El último paso de este análisis es comprobar si el modelo que estamos planteando sirve realmente para la hipótesis que estamos buscando comprobar. Con este propósito vamos a usar `broom::glance()` para comparar los modelos que realizazmos y así interpretar el el AIC y el pseduo $R^2$ para ver que tan bien se ajusta el modelo planteado.
+
+```{r}
+#| label: comparacion-ajuste
+#| message: false
+#| warning: false
+
+bind_rows(
+  broom::glance(mod_1) |> mutate(Modelo = "1. Sin Interacción"),
+  broom::glance(mod_2) |> mutate(Modelo = "2. Con Interacción")
+) |> 
+  # Agregamos el cálculo del Pseudo R2 usando la fórmula de McFadden
+  mutate(pseudo_r2 = 1 - (deviance / null.deviance)) |> 
+  # Seleccionamos las columnas que importan, sacando el BIC
+  select(Modelo, null.deviance, deviance, pseudo_r2, AIC, nobs) |> 
+  # Renombramos las columnas para la tabla final
+  rename(
+    `Deviance Nula` = null.deviance,
+    `Deviance Residual` = deviance,
+    `Pseudo-R² (McFadden)` = pseudo_r2,
+    `Observaciones` = nobs
+  ) |> 
+  knitr::kable(
+    digits = c(0, 1, 1, 3, 1, 0), # Le damos 3 decimales al Pseudo-R2
+    caption = "Métricas de Ajuste Global (Datos de Entrenamiento)"
+  ) |> 
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+    full_width = FALSE,
+    position = "center"
+  ) |> 
+  # Resaltamos la fila del modelo con interacción
+  row_spec(
+    row = 2, 
+    bold = TRUE, 
+    color = "black", 
+    background = "#e6f2ff" 
+  )
+```
+
+Con los resultados obtenidos podemos afirmar que la inclusión de la interacción no mejora el modelo, de hecho, aunque muy levemente, lo empeora. Esto se debe a que el AIC del modelo con interacción es un poco mayor que el del modelo sin interacción.
+
+# Conclusiones
+
+El análisis permitió identificar los principales factores asociados a la probabilidad de percibir ingresos superiores a 50.000 usd anuales en Estados Unidos. Los resultados muestran que los años de educación constituyen uno de los predictores más relevantes: a mayor nivel educativo, mayor es la probabilidad de pertenecer al estrato de altos ingresos.
+
+Asimismo, el estado civil presenta una asociación importante con el ingreso, observándose una mayor probabilidad de altos ingresos entre las personas casadas en comparación con las solteras. Por otro lado, las mujeres presentan una menor probabilidad de alcanzar ingresos elevados respecto de los hombres, incluso controlando por educación, raza y país de origen. También se observan diferencias significativas según algunos grupos raciales y de origen nacional.
+
+Con respecto a la hipótesis de interacción entre educación y sexo, los resultados no aportan evidencia estadísticamente significativa para afirmar que el efecto de la educación sobre los ingresos difiera entre hombres y mujeres.
