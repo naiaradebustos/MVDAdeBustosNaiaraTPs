@@ -38,21 +38,17 @@ pacman::p_load(
   kableExtra,       # decoración de tablas kable
   marginaleffects,  # Cálculo de efectos marginales y predicciones 
   yardstick,        # Métricas de evaluación de clasificación (ROC, AUC, Matriz de Confusión)
-  patchwork         # Organizar el apilado y composición de figuras
+  patchwork,         # Organizar el apilado y composición de figuras
+  here              # Manejo de rutas de archivos
 )
 
-library(here)
-install.packages("data.table", type = "binary")
-library(data.table)
-install.packages("marginaleffects")
-library(marginaleffects)
 ```
 
 ## Preparación de los datos
 
 ```{r}
 ## cargamos las fuentes de datos
-df_census  <- read_csv(here("TP3/data/adult_census_USA.csv"))
+df_census <- read_csv(here("TP3/data/adult_census_USA.csv"))
 
 ```
 
@@ -92,7 +88,10 @@ df_modelo <- df_modelo |>
     marital_status_simple = case_when(
       marital_status %in% c("Never-married", "Divorced", "Separated", "Widowed") ~ "Single",
       marital_status %in% c("Married-civ-spouse", "Married-spouse-absent", "Married-AF-spouse")            ~ "Married"
-    )
+    
+  ), 
+  marital_status_simple = factor(marital_status_simple, 
+                                 levels = c("Single", "Married"))
   )
 # ----------------------------------------------------------
 # simplificamos y ordenamos la variable race
@@ -103,8 +102,9 @@ df_modelo <- df_modelo |>
       race == "Black" ~ "Black",
       TRUE ~ "Other"  # agrupa las categorías pequeñas
     ),
-    race_simple = factor(race_simple, levels = c("White", "Black", "Other"))
+   race_simple = factor(race_simple, levels = c("White", "Black", "Other"))
   )
+
 # ----------------------------------------------------------
 # Simplificamos y ordenamos la variable native_country
 df_modelo <- df_modelo |>
@@ -237,15 +237,59 @@ En base a la observación del gráfico podemos sacar dos conclusiones principale
 
 Por otro lado, en cuanto al térmio de interacción, sería bueno que la variabe `sex` interactúe con `education_num` dado que puede que dos personas con el mismo nivel de educación pero con diiferente género no tengan el mismo salario, lo que reflejaría la brecha de género.
 
+```{r}
+# Proporción observada de ingresos >50K por educación y sexo
+
+df_interaccion <- df_modelo |>
+  group_by(education_num, sex) |>
+  summarise(
+    prop_altos_ingresos = mean(income_num),
+    .groups = "drop"
+  )
+
+print(
+ggplot(df_interaccion,
+       aes(x = education_num,
+           y = prop_altos_ingresos,
+           color = sex)) +
+
+  geom_point(size = 2, alpha = .7) +
+
+  geom_smooth(
+    method = "loess",
+    se = TRUE,
+    linewidth = 1.2
+  ) +
+
+  scale_y_continuous(
+    labels = scales::percent_format()
+  ) +
+
+  labs(
+    title = "Proporción de altos ingresos por años de educación y sexo",
+    subtitle = "Si las pendientes difieren, existe evidencia de interacción",
+    x = "Años de educación",
+    y = "Proporción con ingresos >50K",
+    color = "Sexo"
+  ) +
+
+  theme_minimal()
+)
+```
+
+Justificación de la interacción: Como podemos observar en el gráfico, hay una diferencia entre los ingresos que reciben hombres y mujeres con diferentes niveles de educación. Por lo tanto, viendo que los salarios de los hombres tienden a ser más altos aunque tengan la misma educación que las mujeres, el término de interacción entre `sex` y `education_num` es pertinente para el análisis.
+
 ## Regresiones logísticas
 
 Es ilógico estimar la probabilidad de los diferentes ingresos a partir de una regresión lineal, ya que se extiende hasta el infinito. Por lo tanto, lo vamos a hacer con regresiones logísticas, que estiman valores entre 0 y 1.
+
+Para esto vamos a estimar dos modelos. Por un lado, el modelo 1 incluye los efectos principles de las variables independientes. Por otro lado, el modelo 2 incorpora un término de interacción entre años de educación y sexo para evaluar el efecto de la educación sobre la probabilidad de percibir ingresos superiores a 50.000 dolares entre hombres y mujeres.
 
 ```{r}
 
 # Primero, estimamos el modelo base (sin término de interacción)
 mod_1 <- glm(
-  income ~ education_num +sex+ race_simple + marital_status_simple + country_simple,
+  income ~ education_num + sex + race_simple + marital_status_simple + country_simple,
   family = "binomial", 
   data = df_modelo
 )
@@ -256,11 +300,14 @@ mod_2 <- glm(
   family = "binomial", 
   data = df_modelo
 )
+```
 
-# Revisamos el resumen del modelo con interacción
+Los modelos estimados se deben interpretar respecto a una categoría de referencia. Por este motivo, se dejó a propósito las siguientes categorías como base: hombres para sexo, blancos para raza, Estados Unidos para país de origen y soltero para estado civil.
+
+```{r}
+# Revisamos el resumen de los modelos
 summary(mod_1)
 summary(mod_2)
-
 ```
 
 ## Efectos Marginales Promedio
